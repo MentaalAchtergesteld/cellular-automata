@@ -1,8 +1,8 @@
 const canvas = document.querySelector("canvas");
 const ctx = canvas.getContext("2d");
 
-const WIDTH = 512;
-const HEIGHT = 512;
+const WIDTH = window.innerWidth;
+const HEIGHT = window.innerHeight;
 
 canvas.width = WIDTH;
 canvas.height = HEIGHT;
@@ -10,14 +10,17 @@ canvas.height = HEIGHT;
 const CELL_WIDTH = 8;
 const CELL_HEIGHT = 8;
 
-const GRID_WIDTH = Math.floor(WIDTH/CELL_WIDTH);
-const GRID_HEIGHT = Math.floor(HEIGHT/CELL_HEIGHT);
+const GRID_WIDTH = Math.ceil(WIDTH/CELL_WIDTH);
+const GRID_HEIGHT = Math.ceil(HEIGHT/CELL_HEIGHT);
+
+const OFFSET_X = Math.floor((WIDTH - GRID_WIDTH*CELL_WIDTH) / 2);
+const OFFSET_Y = Math.floor((HEIGHT - GRID_HEIGHT*CELL_HEIGHT) / 2);
 
 let grid = Array.from({ length: GRID_HEIGHT }, () => {
 	return Array.from({ length: GRID_WIDTH }, () => 0)
 });
 
-const GoL = [
+const GameOfLife = [
 	{
 		color: "hsl(0, 0%, 10%)",
 		rules: {
@@ -31,9 +34,158 @@ const GoL = [
 			"1:=2|=3": 1,
 		}
 	},
+];
+
+const BriansBrain = [
+	{
+		color: "hsl(0, 0%, 10%)",
+		rules: {
+			"1:=2": 1,
+		}
+	},
+	{
+		color: "hsl(0, 0%, 90%)",
+		rules: {
+			"default": 2,
+		}
+	},
+	{
+		color: "hsl(0, 0%, 50%)",
+		rules: {
+			"default": 0
+		}
+	},
 ]
 
-let currentRule = GoL;
+const Seeds = [
+	{
+		color: "hsl(0, 0%, 10%)",
+		rules: {
+			"1:=2": 1,
+		}
+	},
+	{
+		color: "hsl(0, 0%, 90%)",
+		rules: {
+			"default": 0
+		}
+	}
+]
+
+const WireWorld = [
+	// 0: Empty
+	{
+		color: "hsl(0, 0%, 10%)",
+		rules: {},
+	},
+	// 1: Electron Head 
+	{
+		color: "hsl(224, 100%, 50%)",
+		rules: {
+			"default": 2,
+		},
+	},
+	// 2: Electron Tail 
+	{
+		color: "hsl(0, 100%, 50%)",
+		rules: {
+			"default": 3,
+		},
+	},
+	// 3: Conductor
+	{
+		color: "hsl(48, 100%, 50%)",
+		rules: {
+			"1:=1|=2": 1
+		},
+	}
+]
+
+let currentRule = null;
+function changeRule(newRule) {
+	currentRule = newRule;
+	for(let y = 0; y < GRID_HEIGHT; y++) {
+		for(let x = 0; x < GRID_WIDTH; x++) {
+			grid[y][x] = Math.min(grid[y][x], currentRule.length-1);
+		}
+	}
+
+}
+
+changeRule(GameOfLife);
+
+const ruleSelect = document.getElementById("ruleSelect");
+const playPauseBtn = document.getElementById("playPauseBtn");
+const stepBtn = document.getElementById("stepBtn");
+const speedRange = document.getElementById("speedRange");
+const speedValue = document.getElementById("speedValue");
+const randomizeBtn = document.getElementById("randomizeBtn");
+const clearBtn = document.getElementById("clearBtn");
+
+// Populate rule select 
+const rules = {
+	"Game of Life": GameOfLife,
+	"Brian's Brain": BriansBrain,
+	"Seeds": Seeds,
+	"WireWorld": WireWorld,
+}
+
+ruleSelect.innerHTML = "";
+
+for(const rule of Object.keys(rules)) {
+	const option = document.createElement("option");
+	option.value = rule;
+	option.innerHTML = rule;
+	ruleSelect.appendChild(option);
+
+	if (currentRule == rules[rule]) ruleSelect.value = rule;
+}
+
+ruleSelect.addEventListener("input", (_) => {
+	changeRule(rules[ruleSelect.value]);
+})
+
+let simulating = false;
+
+function updatePlayPauseBtn() {
+	if(simulating) {
+		playPauseBtn.innerText = "Pause";
+	} else {
+		playPauseBtn.innerText = "Play";
+	}
+}
+
+playPauseBtn.addEventListener("click", (_) => {
+	simulating = !simulating;
+	updatePlayPauseBtn();
+})
+
+stepBtn.addEventListener("click", (_) => {
+	grid = updateGrid();
+})
+
+let speed = 1;
+
+speedRange.addEventListener("input", (_) => {
+	speedValue.innerText = speedRange.value;
+	speed = 1/parseInt(speedRange.value)
+})
+
+randomizeBtn.addEventListener("click", (_) => {
+	for(let y = 0; y < GRID_HEIGHT; y++) {
+		for(let x = 0; x < GRID_WIDTH; x++) {
+			grid[y][x] = Math.floor(Math.random() * currentRule.length);
+		}
+	}
+})
+
+clearBtn.addEventListener("click", (_) => {
+	for(let y = 0; y < GRID_HEIGHT; y++) {
+		for(let x = 0; x < GRID_WIDTH; x++) {
+			grid[y][x] = 0;
+		}
+	}
+})
 
 function calculateNeighbours(x, y) {
 	let neighbours = Array.from({ length: currentRule.length }, () => 0);
@@ -58,6 +210,29 @@ function calculateNeighbours(x, y) {
 	return neighbours;
 }
 
+function checkCondition(condition, targetState, neighbours) {
+	const n = parseInt(condition.slice(1));
+
+	switch (condition[0]) {
+			case "=":
+				return neighbours[targetState] == n;
+			case "<": 
+				return neighbours[targetState] <  n;
+			case ">":
+				return neighbours[targetState] >  n;
+			default:
+				return false;
+	}
+}
+
+function checkRule(rule, neighbours) {
+	const [targetStateStr, conditionsStr] = rule.split(":");
+	const targetState = parseInt(targetStateStr);
+	const conditions = conditionsStr.split("|")
+
+	return conditions.some(c => checkCondition(c, targetState, neighbours));
+}
+
 function getNextState(x, y) {
 	let current = grid[y][x];
 	let rules = currentRule[current].rules;
@@ -65,32 +240,16 @@ function getNextState(x, y) {
 	let neighbours = calculateNeighbours(x, y);
 
 	for(const [rule, resultStr] of Object.entries(rules)) {
+		if (rule == "default") continue;
 		const result = parseInt(resultStr);
-		const [targetStateStr, conditionsStr]	= rule.split(":");
-		const targetState = parseInt(targetStateStr);
-		const conditions = conditionsStr.split("|");
 
-		for(const condition of conditions) {
-			const n = parseInt(condition.slice(1));
-			switch (condition[0]) {
-				case "=":
-					if (neighbours[targetState] == n) return result;
-					break;
-				case "<": 
-					if (neighbours[targetState] <  n) return result;
-					break;
-				case ">":
-					if (neighbours[targetState] > n) return result;
-					break;
-			}
-		}
+		if (checkRule(rule, neighbours)) return result;
 	}
 
-	return current; 
+	return rules["default"] ?? current; 
 }
 
 function updateGrid() {
-	console.log("Hi");
 	const newGrid = [];
 
 	for(let y = 0; y < GRID_HEIGHT; y++) {
@@ -106,23 +265,17 @@ function updateGrid() {
 function render() {
 	for(let y = 0; y < GRID_HEIGHT; y++) {
 		for(let x = 0; x < GRID_WIDTH; x++) {
-			if (grid[y][x] == 1) {
-				ctx.fillStyle = "hsl(0, 0%, 90%)";
-			} else {
-				ctx.fillStyle = "hsl(0, 0%, 10%)";
-			}
-
-			ctx.fillRect(x*CELL_WIDTH, y*CELL_HEIGHT, CELL_WIDTH, CELL_HEIGHT);
+			ctx.fillStyle = currentRule[grid[y][x]].color ?? "hsl(0, 0%, 10%)";
+			ctx.fillRect(x*CELL_WIDTH+OFFSET_X, y*CELL_HEIGHT+OFFSET_Y, CELL_WIDTH, CELL_HEIGHT);
 		}
 	}
 }
-
-let simulating = false;
 
 window.addEventListener("keyup", (e) => {
 	if (e.key == " ") {
 		e.preventDefault();
 		simulating = !simulating;
+		updatePlayPauseBtn();
 	}
 }, { passive: false });
 
@@ -135,12 +288,25 @@ canvas.addEventListener("click", (e) => {
 	const y = Math.floor(mouseY / CELL_HEIGHT);
 
 	if(x >= 0 && x < GRID_WIDTH && y >= 0 && y < GRID_HEIGHT) {
-		grid[y][x] = grid[y][x] == 1 ? 0 : 1;
+		let next = (grid[y][x] + 1) % currentRule.length;
+		grid[y][x] = next;
 	}
 });
 
-function loop(_) {
-	if(simulating) grid = updateGrid();
+let last = performance.now();
+let acc = 0;
+function loop(now) {
+	const dt = (now - last) / 1000;
+	last = now;
+
+	if (simulating) {
+		acc += dt;
+		while (acc > speed) {
+			acc -= speed;
+			if(simulating) grid = updateGrid();
+		}
+	}
+
 	render();
 	requestAnimationFrame(loop)
 }

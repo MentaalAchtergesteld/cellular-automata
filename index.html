@@ -17,14 +17,75 @@
 		body {
 			min-width: 100vw;
 			min-height: 100vh;
-
 			display: flex;
+			align-items: center;
+			justify-content: center;
 			flex-direction: column;
 
+			margin: 0;
+			padding: 0;
+			overflow-y: hidden;
+		}
+
+		#controls {
+			position: absolute;
+			top: 0;
+			left: 50;
+
+			margin: 8px;
+			padding: 8px;
+
+			background: hsl(0, 0%, 90%);
+			box-shadow: 0 0px 4px 4px rgba(0, 0, 0, 0.4);
+			border-radius: 8px;
+
+			min-width: 96px;
+
+			display: flex;
+			flex-direction: row;
+			gap: 16px;
+
+			align-items: center;
+		}
+
+		#controls > * {
+			display: flex;
+			flex-direction: row;
+			gap: 8px;
 			align-items: center;
 			justify-content: center;
 		}
+
+		button {
+			cursor: pointer;
+			padding: 4px;
+		}
 	</style>
 	<canvas></canvas>
+	<div id="controls">
+		<label>
+			Selected rule:
+			<select id="ruleSelect">
+				<option value="GoL">Game of Life</option>
+				<option value="BB">Brian's Brain</option>
+				<option value="Seeds">Seeds</option>
+			</select>
+		</label>
+
+		<div>
+			<button id="playPauseBtn">Play</button>
+			<button id="stepBtn">Step</button>
+			<label> 
+				Speed
+				<input type="range" id="speedRange" min="1" max="100" step="1" value="10" />
+				<span id="speedValue">10</span>
+			</label>
+		</div>
+				
+		<div>
+			<button id="randomizeBtn">Randomize grid</button>
+			<button id="clearBtn">Clear grid</button>
+		</div>
+	</div>
 </body>
 </html>
